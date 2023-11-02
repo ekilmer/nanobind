@@ -1,8 +1,18 @@
-from setuptools import setup
-import re
 import os
+import re
 import shutil
+import subprocess
+import sys
+from tempfile import TemporaryDirectory
 
+from setuptools import setup
+from setuptools.command.build_py import build_py
+from setuptools.command.sdist import sdist
+
+# Allow the user to specify whether nanobind Python package includes
+# submodule'd dependency(s).
+# Must be set to a CMake boolean value
+NB_USE_SUBMODULE_DEPS = os.environ.get("NB_USE_SUBMODULE_DEPS", "ON")
 
 VERSION_REGEX = re.compile(
     r"^\s*#\s*define\s+NB_VERSION_([A-Z]+)\s+(.*)$", re.MULTILINE)
@@ -37,48 +47,80 @@ Please see the following links for tutorial and reference documentation in
 [PDF](https://nanobind.readthedocs.io/_/downloads/en/latest/pdf/) formats.
 '''
 
-from tempfile import TemporaryDirectory
-
-with TemporaryDirectory() as temp_dir:
-    base_dir = os.path.abspath(os.path.dirname(__file__))
+tmp_install_dir = TemporaryDirectory(prefix="nanobind_cmake_")
+install_dir = tmp_install_dir.name
 
 
-    for name in ['include', 'ext', 'cmake', 'src']:
-        shutil.copytree(os.path.join(base_dir, name),
-                        os.path.join(temp_dir, name),
-                        dirs_exist_ok=True)
+class NanobindSdistCommand(sdist):
+    def run(self):
+        # Reset the package directory to the current directory for generating
+        # sdist, or else the temporary installation directory has nothing
+        self.distribution.package_dir['nanobind'] = os.curdir
+        return super().run()
 
-    for fname in ['__init__.py', '__main__.py']:
-        shutil.move(os.path.join(temp_dir, 'src', fname),
-                    os.path.join(temp_dir, fname))
 
-    setup(
-        name="nanobind",
-        version=nanobind_version,
-        author="Wenzel Jakob",
-        author_email="wenzel.jakob@epfl.ch",
-        description='nanobind: tiny and efficient C++/Python bindings',
-        url="https://github.com/wjakob/nanobind",
-        license="BSD",
-        long_description=long_description,
-        long_description_content_type='text/markdown',
-        packages=['nanobind'],
-        zip_safe=False,
-        package_dir={'nanobind': temp_dir},
-        package_data={'nanobind': [
-            'include/nanobind/*.h',
-            'include/nanobind/stl/*.h',
-            'include/nanobind/stl/detail/*.h',
-            'include/nanobind/eigen/*.h',
-            'include/nanobind/intrusive/*.h',
-            'include/nanobind/intrusive/*.inl',
-            'ext/robin_map/include/tsl/robin_map.h',
-            'ext/robin_map/include/tsl/robin_hash.h',
-            'ext/robin_map/include/tsl/robin_growth_policy.h',
-            'cmake/nanobind-config.cmake',
-            'cmake/darwin-ld-cpython.sym',
-            'cmake/darwin-ld-pypy.sym',
-            'src/*.h',
-            'src/*.cpp'
-        ]}
-    )
+class NanobindBuildPyCommand(build_py):
+    def run(self):
+        cmake_exe = shutil.which("cmake")
+        if not cmake_exe:
+            print("CMake executable can't be found", file=sys.stderr)
+            exit(1)
+
+        with TemporaryDirectory() as build_dir:
+            # Configure
+            # TODO: Include robin_map based on env variable
+            subprocess.check_call(
+                [
+                    cmake_exe,
+                    "-S", this_directory,
+                    "-B", build_dir,
+                    "-DNB_PYTHON_INSTALLATION=ON",
+                    f"-DNB_USE_SUBMODULE_DEPS={NB_USE_SUBMODULE_DEPS}",
+                ],
+                stdout=sys.stderr
+            )
+            # Install
+            subprocess.check_call(
+                [cmake_exe, "--install", build_dir, "--prefix", install_dir],
+                stdout=sys.stderr
+            )
+
+        return super().run()
+
+
+setup(
+    name="nanobind",
+    version=nanobind_version,
+    author="Wenzel Jakob",
+    author_email="wenzel.jakob@epfl.ch",
+    description='nanobind: tiny and efficient C++/Python bindings',
+    url="https://github.com/wjakob/nanobind",
+    license="BSD",
+    long_description=long_description,
+    long_description_content_type='text/markdown',
+    packages=['nanobind'],
+    zip_safe=False,
+    package_dir={'nanobind': install_dir},
+    package_data={'nanobind': [
+        'include/nanobind/**/*.h',
+        'include/nanobind/intrusive/*.inl',
+        '**/cmake/nanobind-config.cmake',
+        '**/cmake/nanobind.cmake',
+        '**/cmake/darwin-ld-cpython.sym',
+        '**/cmake/darwin-ld-pypy.sym',
+        'src/**/*.h',
+        'src/**/*.cpp',
+        'src/**/*.py',
+        '**/ext/robin_map/include/tsl/*.h',
+        '**/ext/robin_map/*.natvis',
+        '**/ext/robin_map/CMakeLists.txt',
+        'CMakeLists.txt',
+        'nanobind-config.cmake.in',
+        'tests/*.h',
+        'tests/*.cpp',
+    ]},
+    cmdclass={
+        'build_py': NanobindBuildPyCommand,
+        'sdist': NanobindSdistCommand,
+    }
+)

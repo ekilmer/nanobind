@@ -1,0 +1,28 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+set_and_check(NB_CMAKE_DIR "@PACKAGE_NB_INSTALL_CMAKEDIR@")
+set_and_check(NB_SRC_DIR "@PACKAGE_NB_INSTALL_SRCDIR@")
+set_and_check(NB_INCLUDE_DIR "@PACKAGE_CMAKE_INSTALL_INCLUDEDIR@")
+
+# Required
+if (CMAKE_VERSION VERSION_LESS 3.18)
+  set(NB_PYTHON_DEV_MODULE Development)
+else()
+  set(NB_PYTHON_DEV_MODULE Development.Module)
+endif()
+find_dependency(Python 3.8
+  COMPONENTS Interpreter ${NB_PYTHON_DEV_MODULE}
+  OPTIONAL_COMPONENTS Development.SABIModule
+)
+
+set(NB_USE_SUBMODULE_DEPS @NB_USE_SUBMODULE_DEPS@)
+if(NB_USE_SUBMODULE_DEPS)
+  set_and_check(NB_EXT_DIR "${NB_SRC_DIR}/ext")
+else()
+  find_dependency(tsl-robin-map)
+endif()
+
+# Main nanobind CMake helper file
+include(${NB_CMAKE_DIR}/nanobind.cmake)

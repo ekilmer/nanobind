@@ -6,7 +6,7 @@ How to make a new release?
 2. Add release date to ``docs/changelog.rst``.
 
 3. Update ``setup.py`` if new directories were added (see ``package_data``).
-   Update ``cmake/nanobind-config.cmake`` if new C++ source or header files
+   Update ``cmake/nanobind.cmake`` if new C++ source or header files
    were added.
 
 4. Commit: ``git commit -am "vX.Y.Z release"``

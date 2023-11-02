@@ -65,6 +65,8 @@ step depend on *how you installed* nanobind, in the :ref:`previous section
 
    .. code-block:: cmake
 
+       # Nanobind installs its source files, which we probably don't want
+       set(NB_SKIP_INSTALL_RULES ON)
        add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/ext/nanobind)
 
 Building an extension

@@ -1,6 +1,24 @@
+cmake_minimum_required(VERSION 3.15...3.27)
+project(nanobind_tests LANGUAGES CXX)
+
+string(
+  COMPARE EQUAL
+  "${CMAKE_SOURCE_DIR}" "${PROJECT_SOURCE_DIR}"
+  PROJECT_IS_TOP_LEVEL
+)
+
+option(NB_TEST_STABLE_ABI "Test the stable ABI interface?" ON)
+option(NB_TEST_SHARED_BUILD "Build a shared nanobind library for the test suite?" OFF)
+
+if(PROJECT_IS_TOP_LEVEL)
+  include(CTest)
+  find_package(nanobind REQUIRED)
+endif()
+
 # If leaks are found, abort() during interpreter shutdown to catch this in the CI
 add_definitions(-DNB_ABORT_ON_LEAK=1)
 
+set(NB_EXTRA_ARGS "")
 if (NB_TEST_STABLE_ABI)
   set(NB_EXTRA_ARGS ${NB_EXTRA_ARGS} STABLE_ABI)
 endif()
@@ -51,7 +69,7 @@ add_library(
 
 target_compile_definitions(inter_module PRIVATE -DSHARED_BUILD)
 target_compile_features(inter_module PRIVATE cxx_std_17)
-target_include_directories(inter_module PRIVATE ${NB_DIR}/include)
+target_include_directories(inter_module PRIVATE ${NB_INCLUDE_DIR})
 
 nanobind_add_module(test_inter_module_1_ext NB_DOMAIN mydomain test_inter_module_1.cpp ${NB_EXTRA_ARGS})
 nanobind_add_module(test_inter_module_2_ext NB_DOMAIN mydomain test_inter_module_2.cpp ${NB_EXTRA_ARGS})
@@ -84,6 +102,7 @@ if (NOT (CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_CURRENT_BINARY_DIR) OR MSVC)
     set(OUT_DIR ${CMAKE_CURRENT_BINARY_DIR})
   endif()
 
+  set(TEST_FILES_OUT "")
   foreach(TEST_FILE IN LISTS TEST_FILES)
     set(IN_FILE ${CMAKE_CURRENT_SOURCE_DIR}/${TEST_FILE})
     set(OUT_FILE ${OUT_DIR}/${TEST_FILE})
@@ -95,3 +114,26 @@ if (NOT (CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_CURRENT_BINARY_DIR) OR MSVC)
 
   add_custom_target(copy-tests ALL DEPENDS ${TEST_FILES_OUT})
 endif()
+
+# Helper function to assert that a python module is installed
+function(assert_python_module_installed MODULE_NAME)
+  execute_process(
+      COMMAND ${Python_EXECUTABLE} -c "import ${MODULE_NAME}"
+      RESULT_VARIABLE EXIT_CODE
+      ERROR_QUIET
+  )
+  if (NOT EXIT_CODE EQUAL 0)
+    message(FATAL_ERROR "Cannot import '${MODULE_NAME}' module from Python interpreter '${Python_EXECUTABLE}'")
+  endif()
+endfunction()
+
+assert_python_module_installed(pytest)
+# Optional for tests
+# assert_python_module_installed(numpy)
+# assert_python_module_installed(scipy)
+
+add_test(
+    NAME PythonTest
+    COMMAND ${Python_EXECUTABLE} -m pytest
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)

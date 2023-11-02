@@ -5,7 +5,7 @@ Installing the library
 
 The *nanobind* project is hosted at `wjakob/nanobind on GitHub
 <https://github.com/wjakob/nanobind>`_. To use the library in your own
-projects, it is usually easiest to install it using one of the following three
+projects, it is usually easiest to install it using one of the following four
 methods:
 
 Install via Pip (recommended)
@@ -28,6 +28,18 @@ dependency on *nanobind*, in which case the PyPI package cannot be used.
 .. code-block:: bash
 
     conda install -c conda-forge nanobind
+
+Install via CMake
+=================
+
+Nanobind can be installed through the same commands as many other CMake
+projects, however, like the above methods, only the nanobind source code and
+supporting CMake files are installed.
+
+.. code-block:: bash
+
+    cmake -B build -S .
+    cmake --install build --prefix <location>
 
 Install as a Git submodule
 ==========================

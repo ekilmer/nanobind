@@ -1,8 +1,31 @@
 include_guard(GLOBAL)
 
-if (NOT TARGET Python::Module)
-  message(FATAL_ERROR "You must invoke 'find_package(Python COMPONENTS Interpreter Development REQUIRED)' prior to including nanobind.")
-endif()
+macro(find_nanobind_dependencies)
+  if(NOT TARGET Python::Module)
+    if(NOT DEFINED Python_FIND_FRAMEWORK)
+      set(Python_FIND_FRAMEWORK LAST) # Prefer Brew/Conda to Apple framework python
+    endif()
+    if (CMAKE_VERSION VERSION_LESS 3.18)
+      set(NB_PYTHON_DEV_MODULE Development)
+    else()
+      set(NB_PYTHON_DEV_MODULE Development.Module)
+    endif()
+    find_package(Python 3.8
+      REQUIRED COMPONENTS Interpreter ${NB_PYTHON_DEV_MODULE}
+      OPTIONAL_COMPONENTS Development.SABIModule
+    )
+  endif()
+
+  if(NOT TARGET tsl::robin_map)
+    if(NOT NB_USE_SUBMODULE_DEPS)
+      find_package(tsl-robin-map REQUIRED)
+    else()
+      add_subdirectory("${NB_EXT_DIR}/robin_map" "${CMAKE_CURRENT_BINARY_DIR}/nanobind/robin_map")
+    endif()
+  endif()
+endmacro()
+
+find_nanobind_dependencies()
 
 # Determine the right suffix for ordinary and stable ABI extensions.
 
@@ -63,10 +86,6 @@ endif()
 set(NB_SUFFIX   ${NB_SUFFIX}   CACHE INTERNAL "")
 set(NB_SUFFIX_S ${NB_SUFFIX_S} CACHE INTERNAL "")
 
-get_filename_component(NB_DIR "${CMAKE_CURRENT_LIST_FILE}" PATH)
-get_filename_component(NB_DIR "${NB_DIR}" PATH)
-
-set(NB_DIR      ${NB_DIR} CACHE INTERNAL "")
 set(NB_OPT      $<OR:$<CONFIG:Release>,$<CONFIG:MinSizeRel>> CACHE INTERNAL "")
 set(NB_OPT_SIZE $<OR:$<CONFIG:Release>,$<CONFIG:MinSizeRel>,$<CONFIG:RelWithDebInfo>> CACHE INTERNAL "")
 
@@ -81,7 +100,7 @@ function (nanobind_link_options name)
     else()
       set(NB_LINKER_RESPONSE_FILE darwin-ld-cpython.sym)
     endif()
-    target_link_options(${name} PRIVATE "-Wl,@${NB_DIR}/cmake/${NB_LINKER_RESPONSE_FILE}")
+    target_link_options(${name} PRIVATE "-Wl,@${NB_CMAKE_DIR}/${NB_LINKER_RESPONSE_FILE}")
   endif()
 endfunction()
 
@@ -102,68 +121,16 @@ function (nanobind_build_library TARGET_NAME)
 
   add_library(${TARGET_NAME} ${TARGET_TYPE}
     EXCLUDE_FROM_ALL
-    ${NB_DIR}/include/nanobind/make_iterator.h
-    ${NB_DIR}/include/nanobind/nanobind.h
-    ${NB_DIR}/include/nanobind/nb_accessor.h
-    ${NB_DIR}/include/nanobind/nb_attr.h
-    ${NB_DIR}/include/nanobind/nb_call.h
-    ${NB_DIR}/include/nanobind/nb_cast.h
-    ${NB_DIR}/include/nanobind/nb_class.h
-    ${NB_DIR}/include/nanobind/nb_defs.h
-    ${NB_DIR}/include/nanobind/nb_descr.h
-    ${NB_DIR}/include/nanobind/nb_enums.h
-    ${NB_DIR}/include/nanobind/nb_error.h
-    ${NB_DIR}/include/nanobind/nb_func.h
-    ${NB_DIR}/include/nanobind/nb_lib.h
-    ${NB_DIR}/include/nanobind/nb_misc.h
-    ${NB_DIR}/include/nanobind/nb_python.h
-    ${NB_DIR}/include/nanobind/nb_traits.h
-    ${NB_DIR}/include/nanobind/nb_tuple.h
-    ${NB_DIR}/include/nanobind/nb_types.h
-    ${NB_DIR}/include/nanobind/ndarray.h
-    ${NB_DIR}/include/nanobind/trampoline.h
-    ${NB_DIR}/include/nanobind/operators.h
-    ${NB_DIR}/include/nanobind/stl/array.h
-    ${NB_DIR}/include/nanobind/stl/bind_map.h
-    ${NB_DIR}/include/nanobind/stl/bind_vector.h
-    ${NB_DIR}/include/nanobind/stl/detail
-    ${NB_DIR}/include/nanobind/stl/detail/nb_array.h
-    ${NB_DIR}/include/nanobind/stl/detail/nb_dict.h
-    ${NB_DIR}/include/nanobind/stl/detail/nb_list.h
-    ${NB_DIR}/include/nanobind/stl/detail/nb_set.h
-    ${NB_DIR}/include/nanobind/stl/detail/traits.h
-    ${NB_DIR}/include/nanobind/stl/filesystem.h
-    ${NB_DIR}/include/nanobind/stl/function.h
-    ${NB_DIR}/include/nanobind/stl/list.h
-    ${NB_DIR}/include/nanobind/stl/map.h
-    ${NB_DIR}/include/nanobind/stl/optional.h
-    ${NB_DIR}/include/nanobind/stl/pair.h
-    ${NB_DIR}/include/nanobind/stl/set.h
-    ${NB_DIR}/include/nanobind/stl/shared_ptr.h
-    ${NB_DIR}/include/nanobind/stl/string.h
-    ${NB_DIR}/include/nanobind/stl/string_view.h
-    ${NB_DIR}/include/nanobind/stl/tuple.h
-    ${NB_DIR}/include/nanobind/stl/unique_ptr.h
-    ${NB_DIR}/include/nanobind/stl/unordered_map.h
-    ${NB_DIR}/include/nanobind/stl/unordered_set.h
-    ${NB_DIR}/include/nanobind/stl/variant.h
-    ${NB_DIR}/include/nanobind/stl/vector.h
-    ${NB_DIR}/include/nanobind/eigen/dense.h
-    ${NB_DIR}/include/nanobind/eigen/sparse.h
-
-    ${NB_DIR}/src/buffer.h
-    ${NB_DIR}/src/hash.h
-    ${NB_DIR}/src/nb_internals.h
-    ${NB_DIR}/src/nb_internals.cpp
-    ${NB_DIR}/src/nb_func.cpp
-    ${NB_DIR}/src/nb_type.cpp
-    ${NB_DIR}/src/nb_enum.cpp
-    ${NB_DIR}/src/nb_ndarray.cpp
-    ${NB_DIR}/src/nb_static_property.cpp
-    ${NB_DIR}/src/common.cpp
-    ${NB_DIR}/src/error.cpp
-    ${NB_DIR}/src/trampoline.cpp
-    ${NB_DIR}/src/implicit.cpp
+    ${NB_SRC_DIR}/common.cpp
+    ${NB_SRC_DIR}/error.cpp
+    ${NB_SRC_DIR}/implicit.cpp
+    ${NB_SRC_DIR}/nb_enum.cpp
+    ${NB_SRC_DIR}/nb_func.cpp
+    ${NB_SRC_DIR}/nb_internals.cpp
+    ${NB_SRC_DIR}/nb_ndarray.cpp
+    ${NB_SRC_DIR}/nb_static_property.cpp
+    ${NB_SRC_DIR}/nb_type.cpp
+    ${NB_SRC_DIR}/trampoline.cpp
   )
 
   if (TARGET_TYPE STREQUAL "SHARED")
@@ -189,12 +156,22 @@ function (nanobind_build_library TARGET_NAME)
     target_compile_options(${TARGET_NAME} PRIVATE -fno-strict-aliasing)
   endif()
 
-  if (WIN32)
-    if (${TARGET_NAME} MATCHES "abi3")
-      target_link_libraries(${TARGET_NAME} PUBLIC Python::SABIModule)
-    else()
-      target_link_libraries(${TARGET_NAME} PUBLIC Python::Module)
-    endif()
+  # ---------------------------------------------------------------------------
+  # Check whether all dependencies are present
+  # This must (also) happen within the function because of CMake IMPORTED
+  # target scoping
+  # ---------------------------------------------------------------------------
+  find_nanobind_dependencies()
+
+  if (${TARGET_NAME} MATCHES "abi3")
+    target_link_libraries(${TARGET_NAME} PUBLIC Python::SABIModule)
+  else()
+    target_link_libraries(${TARGET_NAME} PUBLIC Python::Module)
+  endif()
+
+  target_link_libraries(${TARGET_NAME} PUBLIC tsl::robin_map)
+  if(TARGET Eigen3::Eigen)
+    target_link_libraries(${TARGET_NAME} PUBLIC Eigen3::Eigen)
   endif()
 
   # Nanobind performs many assertion checks -- detailed error messages aren't
@@ -202,12 +179,9 @@ function (nanobind_build_library TARGET_NAME)
   target_compile_definitions(${TARGET_NAME} PRIVATE
     $<${NB_OPT_SIZE}:NB_COMPACT_ASSERTIONS>)
 
-  target_include_directories(${TARGET_NAME} PRIVATE
-    ${NB_DIR}/ext/robin_map/include)
-
   target_include_directories(${TARGET_NAME} PUBLIC
-    ${Python_INCLUDE_DIRS}
-    ${NB_DIR}/include)
+    $<BUILD_INTERFACE:${NB_INCLUDE_DIR}>
+  )
 
   target_compile_features(${TARGET_NAME} PUBLIC cxx_std_17)
   nanobind_set_visibility(${TARGET_NAME})
@@ -267,8 +241,10 @@ function (nanobind_set_visibility name)
 endfunction()
 
 function (nanobind_musl_static_libcpp name)
-  if ("$ENV{AUDITWHEEL_PLAT}" MATCHES "musllinux")
-    target_link_options(${name} PRIVATE -static-libstdc++ -static-libgcc)
+  if(DEFINED ENV{AUDITWHEEL_PLAT})
+    if("$ENV{AUDITWHEEL_PLAT}" MATCHES "musllinux")
+      target_link_options(${name} PRIVATE -static-libstdc++ -static-libgcc)
+    endif()
   endif()
 endfunction()
 
